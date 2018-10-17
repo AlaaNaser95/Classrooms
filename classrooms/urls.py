@@ -1,6 +1,6 @@
 
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from classes import views
@@ -19,6 +19,9 @@ urlpatterns = [
     path('classrooms/signup', views.signup, name='signup'),
     path('classrooms/signin', views.signin, name='signin'),
     path('classrooms/signout', views.signout, name='signout'),
+    path('events/', views.test_api, name='events'),
+
+    path('accounts/', include('allauth.urls')),
 ]
 
 if settings.DEBUG:

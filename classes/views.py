@@ -1,9 +1,10 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.contrib.auth import login, authenticate, logout
-
+from django.http import JsonResponse
 from .models import Classroom, Student
 from .forms import ClassroomForm, SignupForm,SigninForm ,StudentForm
+import requests
 
 def classroom_list(request):
     classrooms = Classroom.objects.all()
@@ -23,6 +24,8 @@ def classroom_detail(request, classroom_id):
 
 
 def classroom_create(request):
+    if not request.user.is_authenticated:
+        return redirect('signin')
     form = ClassroomForm()
     if request.method == "POST":
         form = ClassroomForm(request.POST, request.FILES or None)
@@ -41,46 +44,53 @@ def classroom_create(request):
 
 def classroom_update(request, classroom_id):
     classroom = Classroom.objects.get(id=classroom_id)
-    form = ClassroomForm(instance=classroom)
-    if request.method == "POST":
-        form = ClassroomForm(request.POST, request.FILES or None, instance=classroom)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Successfully Edited!")
-            return redirect('classroom-list')
-        print (form.errors)
-    context = {
-    "form": form,
-    "classroom": classroom,
-    }
-    return render(request, 'update_classroom.html', context)
+    if request.user==classroom.teacher:
+        form = ClassroomForm(instance=classroom)
+        if request.method == "POST":
+            form = ClassroomForm(request.POST, request.FILES or None, instance=classroom)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Successfully Edited!")
+                return redirect('classroom-list')
+            print (form.errors)
+        context = {
+        "form": form,
+        "classroom": classroom,
+        }
+        return render(request, 'update_classroom.html', context)
 
 def student_update(request, student_id):
+    
     student = Student.objects.get(id=student_id)
-    form = StudentForm(instance=student)
-    if request.method == "POST":
-        form = StudentForm(request.POST, request.FILES or None, instance=student)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Successfully Edited!")
-            return redirect(student.classroom.get_absolute_url())
-        print (form.errors)
-    context = {
-    "form": form,
-    "student": student,
-    }
-    return render(request, 'update_student.html', context)
+    if request.user==student.classroom.teacher:
+        form = StudentForm(instance=student)
+        if request.method == "POST":
+            form = StudentForm(request.POST, request.FILES or None, instance=student)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Successfully Edited!")
+                return redirect(student.classroom.get_absolute_url())
+            print (form.errors)
+        context = {
+        "form": form,
+        "student": student,
+        }
+        return render(request, 'update_student.html', context)
 
 def classroom_delete(request, classroom_id):
-    Classroom.objects.get(id=classroom_id).delete()
-    messages.success(request, "Successfully Deleted!")
-    return redirect('classroom-list')
+    classroom=Classroom.objects.get(id=classroom_id)
+    if request.user==classroom.teacher:
+        classroom.delete()
+        messages.success(request, "Successfully Deleted!")
+        return redirect('classroom-list')
 
 def student_delete(request, student_id):
-    classroom=Student.objects.get(id=student_id).classroom.id
-    Student.objects.get(id=student_id).delete()
-    messages.success(request, "Successfully Deleted!")
-    return redirect("classroom-detail", classroom_id=classroom)
+    student=Student.objects.get(id=student_id)
+    if request.user==student.classroom.teacher:
+        classroom=Student.objects.get(id=student_id).classroom.id
+        student.delete()
+        messages.success(request, "Successfully Deleted!")
+        return redirect("classroom-detail", classroom_id=classroom)
 
 def signup(request):
     form=SignupForm()
@@ -90,7 +100,7 @@ def signup(request):
             user=form.save(commit=False)
             user.set_password(user.password)
             user.save()
-            login(request,user)
+            # login(request,user)
             return redirect("classroom-list")
     context={
         "form":form,
@@ -123,19 +133,27 @@ def signout(request):
 
 def student_create(request, classroom_id):
     classroom=Classroom.objects.get(id=classroom_id)
-    form = StudentForm()
-    if request.method == "POST":
-        form = StudentForm(request.POST)
-        if form.is_valid():
-            student = form.save(commit=False)
-            student.classroom = classroom
-            student.save()
-            messages.success(request, "Successfully Created!")
-            return redirect("classroom-detail", classroom_id=classroom.id)
-        print (form.errors)
-    context = {
-    "form": form,
-    "classroom":classroom,
-    }
-    return render(request, 'create_student.html', context)
+    if request.user==classroom.teacher:
+        form = StudentForm()
+        if request.method == "POST":
+            form = StudentForm(request.POST)
+            if form.is_valid():
+                student = form.save(commit=False)
+                student.classroom = classroom
+                student.save()
+                messages.success(request, "Successfully Created!")
+                return redirect("classroom-detail", classroom_id=classroom.id)
+            print (form.errors)
+        context = {
+        "form": form,
+        "classroom":classroom,
+        }
+        return render(request, 'create_student.html', context)
 
+def test_api(request):
+    url="https://api.github.com/events"
+    response=requests.get(url)
+    context={
+        'response':response.json()#was missinng
+    }
+    return render(request,"api.html",context)
